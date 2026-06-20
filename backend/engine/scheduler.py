@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 
 from .geometry import euclidean
@@ -144,21 +145,43 @@ def _route_from_sequence(
 
 
 def _solve_exhaustive(orders: List[Order], rider: Rider, strategy: str) -> List[Tuple[int, str]]:
-    """精确枚举 + Pandas 汇总。"""
-    candidates = []
-    for seq in _feasible_sequences(len(orders)):
-        total_time, total_lateness, _ = _evaluate_sequence(seq, orders, rider)
-        candidates.append(
-            {
-                "seq": seq,
-                "total_time": total_time,
-                "total_lateness": total_lateness,
-                "cost": _cost(total_time, total_lateness, strategy),
-            }
-        )
-    df = pd.DataFrame(candidates)
-    best_idx = int(df["cost"].idxmin())
-    return df.iloc[best_idx]["seq"]
+    """精确枚举 + Pandas 汇总。
+
+    关键设计：
+        1. DataFrame **仅存放数值标量列**（全为 float64），序列本身保存在
+           独立 Python 列表 (feasible) 中。这彻底避免了把 Python list 塞进
+           object dtype 列时引发的隐式标签对齐 / 视图拷贝问题——
+           在 uvicorn 多线程执行器下，object 列曾触发 Pandas/NumPy 的
+           线程不安全路径导致进程级崩溃。
+        2. 用 np.argmin(df["cost"].values) 取得 0-based 位置（语义明确），
+           同时映射到 feasible 列表与 DataFrame 行位置，
+           完全规避「idxmin 返回行 label 却被当作 iloc position」的错位隐患。
+    """
+    feasible = _feasible_sequences(len(orders))
+    total_times: List[float] = []
+    total_lateness: List[float] = []
+    costs: List[float] = []
+    for seq in feasible:
+        tt, tl, _ = _evaluate_sequence(seq, orders, rider)
+        total_times.append(tt)
+        total_lateness.append(tl)
+        costs.append(_cost(tt, tl, strategy))
+
+    df = pd.DataFrame(
+        {
+            "total_time": total_times,
+            "total_lateness": total_lateness,
+            "cost": costs,
+        },
+        index=pd.RangeIndex(len(feasible)),
+    )
+    # 用 numpy 底层数组求 argmin，返回 0-based 整数位置
+    best_pos = int(np.argmin(np.asarray(df["cost"].values)))
+    best_seq = feasible[best_pos]
+    # 显式释放 DataFrame 与临时列表（高并发下避免内存占用叠加）
+    del df, total_times, total_lateness, costs
+    # feasible 在函数返回时随栈帧释放
+    return best_seq
 
 
 def _solve_greedy(orders: List[Order], rider: Rider, strategy: str) -> List[Tuple[int, str]]:
