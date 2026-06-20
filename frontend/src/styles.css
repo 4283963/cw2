@@ -498,3 +498,152 @@ body {
   background: #1e293b;
   border-radius: 8px;
 }
+
+/* ---------- 骑手状态 / 天气切换器 ---------- */
+.weather-switch {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.6);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.weather-switch.storm {
+  border-color: rgba(248, 113, 113, 0.55);
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.25), 0 0 18px rgba(248, 113, 113, 0.15);
+  animation: storm-panel 2.2s ease-in-out infinite;
+}
+
+@keyframes storm-panel {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.25), 0 0 14px rgba(248, 113, 113, 0.1); }
+  50% { box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.5), 0 0 24px rgba(248, 113, 113, 0.28); }
+}
+
+.weather-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.storm-tag {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fecaca;
+  background: rgba(248, 113, 113, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  border-radius: 999px;
+  padding: 3px 10px;
+  animation: storm-panel 1.4s ease-in-out infinite;
+}
+
+.weather-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.wtab {
+  flex: 1;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #cbd5e1;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  transition: all 0.15s;
+}
+
+.wtab:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: #e2e8f0;
+}
+
+.wtab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wtab.active {
+  background: rgba(56, 189, 248, 0.14);
+  border-color: var(--accent);
+  color: #bae6fd;
+}
+
+.wtab.active.danger {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: var(--danger);
+  color: #fecaca;
+  animation: storm-panel 1.4s ease-in-out infinite;
+}
+
+.weather-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ---------- 路线段样式（延误风险段闪烁红色） ---------- */
+.leg {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.leg-normal {
+  stroke: #334155;
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+}
+
+.leg-risk {
+  stroke: #ef4444;
+  stroke-width: 4;
+  stroke-dasharray: 9 5;
+  filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.85));
+  animation: leg-flash 0.7s linear infinite;
+}
+
+/* 暴雨天气下让闪烁更刺眼、更快 */
+.map-wrap.storm .leg-risk {
+  stroke: #ff2d2d;
+  stroke-width: 5;
+  stroke-dasharray: 11 4;
+  filter: drop-shadow(0 0 7px rgba(255, 45, 45, 1));
+  animation: leg-flash-storm 0.45s linear infinite;
+}
+
+@keyframes leg-flash {
+  0%, 100% { stroke-opacity: 1; }
+  50% { stroke-opacity: 0.3; }
+}
+
+@keyframes leg-flash-storm {
+  0%, 100% { stroke-opacity: 1; filter: drop-shadow(0 0 7px rgba(255, 45, 45, 1)); }
+  50% { stroke-opacity: 0.35; filter: drop-shadow(0 0 12px rgba(255, 80, 80, 1)); }
+}
+
+/* 图例中的路线段色块 */
+.leg-swatch {
+  width: 22px;
+  height: 0;
+  display: inline-block;
+  border-top-width: 3px;
+  border-top-style: dashed;
+  margin-right: 6px;
+}
+
+.leg-swatch.leg-normal {
+  border-top-color: #334155;
+}
+
+.leg-swatch.leg-risk {
+  border-top-color: #ef4444;
+}
+
+/* 暴雨雨幕微动 */
+.rain-layer {
+  pointer-events: none;
+}

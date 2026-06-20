@@ -73,6 +73,7 @@ export interface SimulateResult {
   route: Stop[]
   risk: RiskAssessment
   order_delivery_times: Record<string, number>
+  weather: Weather
 }
 
 export interface SampleData {
@@ -83,9 +84,12 @@ export interface SampleData {
 
 export type Strategy = 'min_lateness' | 'min_time'
 
+export type Weather = 'normal' | 'storm'
+
 export interface SimulateRequest {
   rider: Rider
   orders: Order[]
   strategy: Strategy
   max_step: number
+  weather: Weather
 }

@@ -1,6 +1,7 @@
-// SVG 地图画布：在抽象欧氏坐标平面上绘制商家/顾客/骑手动态坐标与配送路线
+// SVG 地图画布：在抽象欧氏坐标平面上绘制商家/顾客/骑手动态坐标与配送路线。
+// 暴雨天气下，预计超时订单对应的路线段会闪烁刺眼红色提醒调度员。
 import { useMemo } from 'react'
-import type { Frame, Order, Rider, RiskItem, Stop } from '../types'
+import type { Frame, Order, Rider, RiskItem, Stop, Weather } from '../types'
 
 interface Props {
   orders: Order[]
@@ -9,6 +10,7 @@ interface Props {
   frames: Frame[]
   index: number
   riskMap: Record<string, RiskItem>
+  weather: Weather
 }
 
 const W = 900
@@ -26,7 +28,9 @@ function stateColor(state: string | undefined): string {
   }
 }
 
-export function MapCanvas({ orders, rider, route, frames, index, riskMap }: Props) {
+export function MapCanvas({ orders, rider, route, frames, index, riskMap, weather }: Props) {
+  const isStorm = weather === 'storm'
+
   const bounds = useMemo(() => {
     const pts = [rider.location, ...orders.flatMap((o) => [o.merchant, o.customer])]
     const xs = pts.map((p) => p.x)
@@ -65,11 +69,24 @@ export function MapCanvas({ orders, rider, route, frames, index, riskMap }: Prop
   ]
   const trailPath = trailPts.map((p) => `${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ')
 
-  // 规划路线
-  const plannedPts = [rider.location, ...route.map((s) => s.location)]
-  const plannedPath = plannedPts
-    .map((p) => `${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`)
-    .join(' ')
+  // 规划路线按「停靠点」拆成逐段，按该段终点订单是否延误风险着色
+  const legs = useMemo(() => {
+    const pts = [rider.location, ...route.map((s) => s.location)]
+    return route.map((stop, i) => {
+      const a = pts[i]
+      const b = pts[i + 1]
+      const risk = riskMap[stop.order_id]
+      return {
+        key: `${i}-${stop.order_id}-${stop.kind}`,
+        x1: sx(a.x),
+        y1: sy(a.y),
+        x2: sx(b.x),
+        y2: sy(b.y),
+        isRisk: !!risk?.is_delay_risk,
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route, rider, riskMap, bounds])
 
   // 当前目标连线
   const targetStop =
@@ -91,10 +108,26 @@ export function MapCanvas({ orders, rider, route, frames, index, riskMap }: Prop
     return { xs, ys }
   }, [bounds])
 
+  // 暴雨雨幕：若干条斜向流动的雨线
+  const rainDrops = useMemo(() => {
+    const drops: { x: number; y: number; d: number }[] = []
+    for (let i = 0; i < 60; i++) {
+      drops.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        d: 0.6 + Math.random() * 0.8,
+      })
+    }
+    return drops
+  }, [isStorm])
+
   return (
-    <div className="map-wrap">
+    <div className={`map-wrap ${isStorm ? 'storm' : ''}`}>
       <svg viewBox={`0 0 ${W} ${H}`} className="map-svg" preserveAspectRatio="xMidYMid meet">
-        <rect x={0} y={0} width={W} height={H} fill="#0b1220" />
+        <rect x={0} y={0} width={W} height={H} fill={isStorm ? '#0a1018' : '#0b1220'} />
+
+        {/* 暴雨压暗蒙层 */}
+        {isStorm && <rect x={0} y={0} width={W} height={H} fill="#1e3a5f" opacity={0.18} />}
 
         {/* 网格 */}
         <g stroke="#1e293b" strokeWidth={1}>
@@ -106,17 +139,17 @@ export function MapCanvas({ orders, rider, route, frames, index, riskMap }: Prop
           ))}
         </g>
 
-        {/* 规划路线（虚线） */}
-        {route.length > 0 && (
-          <polyline
-            points={plannedPath}
-            fill="none"
-            stroke="#334155"
-            strokeWidth={2}
-            strokeDasharray="6 6"
-            strokeLinejoin="round"
+        {/* 规划路线：逐段绘制，延误风险段闪烁红色 */}
+        {legs.map((lg) => (
+          <line
+            key={lg.key}
+            x1={lg.x1}
+            y1={lg.y1}
+            x2={lg.x2}
+            y2={lg.y2}
+            className={`leg ${lg.isRisk ? 'leg-risk' : 'leg-normal'}`}
           />
-        )}
+        ))}
 
         {/* 已行驶轨迹 */}
         {frames.length > 0 && (
@@ -208,12 +241,39 @@ export function MapCanvas({ orders, rider, route, frames, index, riskMap }: Prop
 
         {/* 起点 */}
         <circle cx={sx(rider.location.x)} cy={sy(rider.location.y)} r={4} fill="#94a3b8" />
+
+        {/* 暴雨雨幕（最上层） */}
+        {isStorm && (
+          <g className="rain-layer">
+            {rainDrops.map((d, i) => (
+              <line
+                key={i}
+                x1={d.x}
+                y1={d.y}
+                x2={d.x - 6}
+                y2={d.y + 16}
+                stroke="#7dd3fc"
+                strokeWidth={1}
+                opacity={0.35}
+              >
+                <animateTransform
+                  attributeName="transform"
+                  type="translate"
+                  values={`0 0; -8 26`}
+                  dur={`${d.d}s`}
+                  repeatCount="indefinite"
+                />
+              </line>
+            ))}
+          </g>
+        )}
       </svg>
       <div className="map-legend">
         <span><i className="dot dot-merchant" /> 商家(取件)</span>
         <span><i className="dot dot-customer" /> 顾客(派件)</span>
         <span><i className="dot dot-rider" /> 骑手</span>
-        <span><i className="dot dot-risk" /> 延误风险</span>
+        <span><i className="leg-swatch leg-risk" /> 延误风险路线(闪烁)</span>
+        <span><i className="leg-swatch leg-normal" /> 正常路线</span>
         <span><i className="dot dot-trail" /> 已行驶轨迹</span>
       </div>
     </div>

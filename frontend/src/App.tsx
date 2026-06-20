@@ -1,21 +1,24 @@
-// 应用主入口：装配地图、控制、统计、订单列表，并驱动模拟请求
-import { useEffect, useMemo, useState } from 'react'
+// 应用主入口：装配地图、天气切换、控制、统计、订单列表，并驱动模拟请求
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MapCanvas } from './components/MapCanvas'
 import { OrderList } from './components/OrderList'
 import { ControlPanel } from './components/ControlPanel'
 import { StatsPanel } from './components/StatsPanel'
+import { WeatherSwitch } from './components/WeatherSwitch'
 import { useSimulation } from './hooks/useSimulation'
 import { getSample, runSimulate } from './api/client'
-import type { Order, Rider, RiskItem, SimulateResult, Strategy, Stop } from './types'
+import type { Order, Rider, RiskItem, SimulateResult, Strategy, Stop, Weather } from './types'
 
 export default function App() {
   const [rider, setRider] = useState<Rider | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [strategy, setStrategy] = useState<Strategy>('min_lateness')
   const [maxStep, setMaxStep] = useState(2)
+  const [weather, setWeather] = useState<Weather>('normal')
   const [result, setResult] = useState<SimulateResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const didRun = useRef(false)
 
   useEffect(() => {
     getSample()
@@ -37,19 +40,31 @@ export default function App() {
 
   const orderDeliveryTimes = result?.order_delivery_times ?? {}
 
-  const handleRun = async () => {
-    if (!rider) return
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await runSimulate({ rider, orders, strategy, max_step: maxStep })
-      setResult(res)
-    } catch (e) {
-      setError('模拟失败: ' + String(e))
-    } finally {
-      setLoading(false)
-    }
-  }
+  // 用指定天气触发一次模拟（weather 显式传入，避免闭包陈旧）
+  const runWith = useCallback(
+    async (w: Weather) => {
+      if (!rider) return
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await runSimulate({ rider, orders, strategy, max_step: maxStep, weather: w })
+        setResult(res)
+        didRun.current = true
+      } catch (e) {
+        setError('模拟失败: ' + String(e))
+      } finally {
+        setLoading(false)
+      }
+    },
+    [rider, orders, strategy, maxStep],
+  )
+
+  // 天气切换后，若已模拟过则自动用新天气重新计算
+  useEffect(() => {
+    if (didRun.current) runWith(weather)
+  }, [weather, runWith])
+
+  const handleRun = () => runWith(weather)
 
   const routeSequence: Stop[] = result?.route ?? []
 
@@ -99,8 +114,10 @@ export default function App() {
               frames={result?.frames ?? []}
               index={sim.index}
               riskMap={riskMap}
+              weather={weather}
             />
           )}
+          <WeatherSwitch weather={weather} onChange={setWeather} disabled={loading} />
           {routeSequence.length > 0 && (
             <div className="panel route-strip">
               <span className="panel-title">最优配送顺序</span>

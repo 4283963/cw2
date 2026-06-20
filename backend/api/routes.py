@@ -99,6 +99,17 @@ def _orders_from_request(req) -> List[Order]:
     return [_to_order(o) for o in req.orders]
 
 
+def _apply_weather(rider: Rider, weather: str) -> Rider:
+    """根据天气调整骑手行驶速度：暴雨天气所有骑手速度减半。"""
+    if weather == "storm":
+        return Rider(
+            rider_id=rider.rider_id,
+            location=rider.location,
+            speed=rider.speed / 2.0,
+        )
+    return rider
+
+
 # ---------- 端点 ----------
 
 @router.get("/health")
@@ -115,7 +126,7 @@ def get_sample():
 @router.post("/schedule", response_model=ScheduleResponse)
 def post_schedule(req: ScheduleRequest):
     orders = _orders_from_request(req)
-    rider = _to_rider(req.rider)
+    rider = _apply_weather(_to_rider(req.rider), req.weather)
     route = schedule_route(orders, rider, strategy=req.strategy)
     risk = assess_risk(orders, route)
     return ScheduleResponse(
@@ -124,13 +135,14 @@ def post_schedule(req: ScheduleRequest):
         total_time=route.total_time,
         strategy=route.strategy,
         risk=_to_risk_schema(risk),
+        weather=req.weather,
     )
 
 
 @router.post("/simulate", response_model=SimulateResponse)
 def post_simulate(req: SimulateRequest):
     orders = _orders_from_request(req)
-    rider = _to_rider(req.rider)
+    rider = _apply_weather(_to_rider(req.rider), req.weather)
     route = schedule_route(orders, rider, strategy=req.strategy)
     result = simulate_trajectory(orders, rider, route, max_step=req.max_step)
     frames = [
@@ -153,4 +165,5 @@ def post_simulate(req: SimulateRequest):
         route=[_to_stop_schema(s) for s in route.stops],
         risk=_to_risk_schema(result.risk),
         order_delivery_times=route.order_delivery_times,
+        weather=req.weather,
     )

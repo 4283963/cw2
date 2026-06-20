@@ -34,6 +34,7 @@ class ScheduleRequest(BaseModel):
     rider: RiderSchema
     orders: List[OrderSchema]
     strategy: str = Field("min_lateness", description="min_lateness | min_time")
+    weather: str = Field("normal", description="normal | storm（暴雨时骑手速度减半）")
 
 
 class StopSchema(BaseModel):
@@ -68,6 +69,7 @@ class ScheduleResponse(BaseModel):
     total_time: float
     strategy: str
     risk: RiskAssessmentSchema
+    weather: str = "normal"
 
 
 # ---------- 模拟 ----------
@@ -77,6 +79,7 @@ class SimulateRequest(BaseModel):
     orders: List[OrderSchema]
     strategy: str = "min_lateness"
     max_step: float = Field(2.0, gt=0, description="行驶腿相邻帧最大间距")
+    weather: str = Field("normal", description="normal | storm（暴雨时骑手速度减半）")
 
 
 class FrameSchema(BaseModel):
@@ -97,6 +100,7 @@ class SimulateResponse(BaseModel):
     route: List[StopSchema]
     risk: RiskAssessmentSchema
     order_delivery_times: Dict[str, float]
+    weather: str = "normal"
 
 
 # ---------- 示例 ----------
